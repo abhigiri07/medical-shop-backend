@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
+const { auth } = require('../middleware/adminAuth');
 
 router.get('/', (req, res) => {
   const { category } = req.query;
@@ -36,7 +37,7 @@ router.get('/:id', (req, res) => {
   });
 });
 
-router.post('/', (req, res) => {
+router.post('/', auth, (req, res) => {
   const { name, description, price, stock_quantity, image_url, category, prescription_required } = req.body;
   if (!name || price === undefined) {
     return res.status(400).json({ error: 'name and price are required' });
@@ -53,7 +54,7 @@ router.post('/', (req, res) => {
   });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', auth, (req, res) => {
   const { name, description, price, stock_quantity, image_url, category, prescription_required } = req.body;
   const sql = `
     UPDATE medicines SET
@@ -73,7 +74,7 @@ router.put('/:id', (req, res) => {
   });
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', auth, (req, res) => {
   db.run('DELETE FROM medicines WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Medicine not found' });
