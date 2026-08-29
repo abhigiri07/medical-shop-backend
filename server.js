@@ -5,8 +5,8 @@ const { init } = require('./db');
 const medicinesRouter = require('./routes/medicines');
 const ordersRouter = require('./routes/orders');
 const contactRouter = require('./routes/contact');
-const { login } = require('./middleware/adminAuth');
-const adminRouter = require('./routes/admin');
+const authRouter = require('./routes/auth');
+const profileRouter = require('./routes/profile');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,11 +16,11 @@ app.use(express.json());
 
 init();
 
-app.post('/api/admin/login', login);
-app.use('/api/admin', adminRouter);
 app.use('/api/medicines', medicinesRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/contact', contactRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/profile', profileRouter);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Medical Shop API is running' });

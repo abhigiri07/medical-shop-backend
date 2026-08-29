@@ -20,8 +20,20 @@ function init() {
     `);
 
     db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        phone TEXT,
+        password_hash TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    db.run(`
       CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
         customer_name TEXT NOT NULL,
         phone TEXT NOT NULL,
         delivery_address TEXT NOT NULL,
@@ -52,6 +64,18 @@ function init() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Safe migration: older deployments may have an `orders` table from
+    // before user_id existed. Add it if missing (no-op if already present).
+    db.all('PRAGMA table_info(orders)', (err, columns) => {
+      if (err) return;
+      const hasUserId = columns.some((c) => c.name === 'user_id');
+      if (!hasUserId) {
+        db.run('ALTER TABLE orders ADD COLUMN user_id INTEGER', () => {
+          console.log('Migrated orders table: added user_id column.');
+        });
+      }
+    });
 
     db.get('SELECT COUNT(*) as count FROM medicines', (err, row) => {
       if (err) {

@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
-const { auth } = require('../middleware/adminAuth');
 
 // POST /api/contact - store a message from the app's Contact page
 router.post('/', (req, res) => {
@@ -19,7 +18,7 @@ router.post('/', (req, res) => {
 });
 
 // GET /api/contact - list messages (admin/shop owner view)
-router.get('/', auth, (req, res) => {
+router.get('/', (req, res) => {
   db.all('SELECT * FROM contact_messages ORDER BY created_at DESC', (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
