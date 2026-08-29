@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { init } = require('./db');
@@ -14,8 +16,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-init();
-
 app.use('/api/medicines', medicinesRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/contact', contactRouter);
@@ -26,7 +26,16 @@ app.get('/', (req, res) => {
   res.json({ message: 'Medical Shop API is running' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Medical Shop backend running at http://localhost:${PORT}`);
-  console.log(`Android emulator should call http://10.0.2.2:${PORT}/`);
-});
+// Wait for the database tables to exist (and sample data to seed) before
+// accepting any requests, so the very first request can't race the setup.
+init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Medical Shop backend running at http://localhost:${PORT}`);
+      console.log(`Android emulator should call http://10.0.2.2:${PORT}/`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database:', err.message);
+    process.exit(1);
+  });

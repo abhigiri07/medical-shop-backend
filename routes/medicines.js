@@ -1,84 +1,111 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { pool } = require('../db');
 
-router.get('/', (req, res) => {
-  const { category } = req.query;
-  let sql = 'SELECT * FROM medicines';
-  const params = [];
-  if (category) {
-    sql += ' WHERE category = ?';
-    params.push(category);
-  }
-  sql += ' ORDER BY name ASC';
+router.get('/', async (req, res) => {
+  try {
+    const { category } = req.query;
+    let sql = 'SELECT * FROM medicines';
+    const params = [];
 
-  db.all(sql, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (category) {
+      sql += ' WHERE category = $1';
+      params.push(category);
+    }
+    sql += ' ORDER BY name ASC';
+
+    const { rows } = await pool.query(sql, params);
     res.json(rows.map(formatMedicine));
-  });
-});
-
-router.get('/search', (req, res) => {
-  const q = req.query.q || '';
-  const sql = 'SELECT * FROM medicines WHERE name LIKE ? OR description LIKE ? ORDER BY name ASC';
-  const like = `%${q}%`;
-  db.all(sql, [like, like], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows.map(formatMedicine));
-  });
-});
-
-router.get('/:id', (req, res) => {
-  db.get('SELECT * FROM medicines WHERE id = ?', [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Medicine not found' });
-    res.json(formatMedicine(row));
-  });
-});
-
-router.post('/', (req, res) => {
-  const { name, description, price, stock_quantity, image_url, category, prescription_required } = req.body;
-  if (!name || price === undefined) {
-    return res.status(400).json({ error: 'name and price are required' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  const sql = `
-    INSERT INTO medicines (name, description, price, stock_quantity, image_url, category, prescription_required)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `;
-  const params = [name, description || '', price, stock_quantity || 0, image_url || '', category || '', prescription_required ? 1 : 0];
-
-  db.run(sql, params, function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, ...req.body });
-  });
 });
 
-router.put('/:id', (req, res) => {
-  const { name, description, price, stock_quantity, image_url, category, prescription_required } = req.body;
-  const sql = `
-    UPDATE medicines SET
-      name = COALESCE(?, name),
-      description = COALESCE(?, description),
-      price = COALESCE(?, price),
-      stock_quantity = COALESCE(?, stock_quantity),
-      image_url = COALESCE(?, image_url),
-      category = COALESCE(?, category),
-      prescription_required = COALESCE(?, prescription_required)
-    WHERE id = ?
-  `;
-  db.run(sql, [name, description, price, stock_quantity, image_url, category, prescription_required, req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Medicine not found' });
+router.get('/search', async (req, res) => {
+  try {
+    const q = req.query.q || '';
+    const sql = 'SELECT * FROM medicines WHERE name ILIKE $1 OR description ILIKE $1 ORDER BY name ASC';
+    const { rows } = await pool.query(sql, [`%${q}%`]);
+    res.json(rows.map(formatMedicine));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM medicines WHERE id = $1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Medicine not found' });
+    res.json(formatMedicine(rows[0]));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const { name, description, price, stock_quantity, image_url, category, prescription_required } = req.body;
+
+    if (!name || price === undefined) {
+      return res.status(400).json({ error: 'name and price are required' });
+    }
+
+    const sql = `
+      INSERT INTO medicines (name, description, price, stock_quantity, image_url, category, prescription_required)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
+    `;
+    const params = [
+      name,
+      description || '',
+      price,
+      stock_quantity || 0,
+      image_url || '',
+      category || '',
+      !!prescription_required,
+    ];
+
+    const { rows } = await pool.query(sql, params);
+    res.status(201).json({ id: rows[0].id, ...req.body });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, description, price, stock_quantity, image_url, category, prescription_required } = req.body;
+
+    const sql = `
+      UPDATE medicines SET
+        name = COALESCE($1, name),
+        description = COALESCE($2, description),
+        price = COALESCE($3, price),
+        stock_quantity = COALESCE($4, stock_quantity),
+        image_url = COALESCE($5, image_url),
+        category = COALESCE($6, category),
+        prescription_required = COALESCE($7, prescription_required)
+      WHERE id = $8
+    `;
+    const result = await pool.query(sql, [
+      name, description, price, stock_quantity, image_url, category, prescription_required, req.params.id,
+    ]);
+
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Medicine not found' });
     res.json({ message: 'Medicine updated' });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.delete('/:id', (req, res) => {
-  db.run('DELETE FROM medicines WHERE id = ?', [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Medicine not found' });
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM medicines WHERE id = $1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Medicine not found' });
     res.json({ message: 'Medicine deleted' });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 function formatMedicine(row) {
@@ -86,7 +113,7 @@ function formatMedicine(row) {
     id: row.id,
     name: row.name,
     description: row.description,
-    price: row.price,
+    price: Number(row.price),
     stock_quantity: row.stock_quantity,
     image_url: row.image_url,
     category: row.category,
