@@ -32,6 +32,23 @@ router.get('/search', async (req, res) => {
   }
 });
 
+// GET /api/medicines/categories - distinct list of categories currently in use.
+// Used by the Android app's Categories tab and the admin panel's medicine
+// form, so a brand-new category typed by the admin shows up everywhere as
+// soon as a medicine using it is saved.
+router.get('/categories', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT category FROM medicines
+       WHERE category IS NOT NULL AND TRIM(category) <> ''
+       ORDER BY category ASC`
+    );
+    res.json(rows.map((r) => r.category));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM medicines WHERE id = $1', [req.params.id]);
