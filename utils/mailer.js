@@ -11,14 +11,14 @@ const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 async function sendOtpEmail(toEmail, code, purpose) {
   const subject = purpose === 'reset'
-    ? 'Your MediQuick password reset code'
-    : 'Verify your MediQuick account';
+    ? 'Your Saikrupa Medical password reset code'
+    : 'Verify your Saikrupa Medical account';
 
   const heading = purpose === 'reset' ? 'Reset your password' : 'Verify your email';
 
   const intro = purpose === 'reset'
-    ? 'Use the code below to reset your MediQuick password.'
-    : 'Use the code below to verify your MediQuick account.';
+    ? 'Use the code below to reset your Saikrupa Medical password.'
+    : 'Use the code below to verify your Saikrupa Medical account.';
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
@@ -46,7 +46,7 @@ async function sendOtpEmail(toEmail, code, purpose) {
     body: JSON.stringify({
       sender: {
         email: process.env.BREVO_SENDER_EMAIL,
-        name: process.env.BREVO_SENDER_NAME || 'MediQuick',
+        name: process.env.BREVO_SENDER_NAME || 'Saikrupa Medical',
       },
       to: [{ email: toEmail }],
       subject,
