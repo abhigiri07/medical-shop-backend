@@ -39,6 +39,20 @@ async function init() {
       email TEXT NOT NULL UNIQUE,
       phone TEXT,
       password_hash TEXT NOT NULL,
+      email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  // One-time codes used for both signup email verification and
+  // forgot-password resets. purpose is 'signup' or 'reset'.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS otp_codes (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      code TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
@@ -80,6 +94,7 @@ async function init() {
   // Safe to run every startup: Postgres supports IF NOT EXISTS on
   // ADD COLUMN directly, unlike SQLite, so no manual check needed.
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id INTEGER`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE`);
 
   const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM medicines');
   if (rows[0].count === 0) {
