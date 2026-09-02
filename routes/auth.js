@@ -45,13 +45,22 @@ async function consumeValidOtp(email, code, purpose) {
 // No token is returned yet — the account can't log in until verified.
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, email, password, otp } = req.body;
+    const phone = normalizePhone(req.body.phone);
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'name, email and password are required' });
+    if (!name || !email || !password || !phone) {
+      return res.status(400).json({ error: 'name, email, phone and password are required' });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    if (!otp) {
+      return res.status(400).json({ error: 'Phone verification code is required' });
+    }
+
+    const otpResult = await checkOtp(phone, 'signup', otp, { consume: true });
+    if (!otpResult.ok) {
+      return res.status(400).json({ error: otpResult.reason });
     }
 
     const normalizedEmail = email.toLowerCase();
@@ -183,6 +192,7 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // POST /api/auth/forgot-password
 // Always responds the same way whether or not the email exists, so
