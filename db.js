@@ -91,22 +91,6 @@ async function init() {
     )
   `);
 
-  // OTP codes for phone verification (signup) and password reset (login).
-  // A code is looked up by (phone, purpose) and is single-use ("used").
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS otps (
-      id SERIAL PRIMARY KEY,
-      phone TEXT NOT NULL,
-      purpose TEXT NOT NULL,
-      otp_hash TEXT NOT NULL,
-      expires_at TIMESTAMP NOT NULL,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      used BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_otps_phone_purpose ON otps (phone, purpose)`);
-
   // Safe to run every startup: Postgres supports IF NOT EXISTS on
   // ADD COLUMN directly, unlike SQLite, so no manual check needed.
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id INTEGER`);

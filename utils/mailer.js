@@ -1,48 +1,20 @@
-const nodemailer = require('nodemailer');
+// Render's free tier blocks outbound SMTP (ports 25/465/587), so this
+// sends over plain HTTPS via Brevo's transactional email API instead.
+// Free Brevo account: https://app.brevo.com/ (300 emails/day, no card needed)
+//   1. Sign up, then go to Senders, Domains & Dedicated IPs > Senders
+//      and add + verify the email address you want to send FROM.
+//   2. Go to SMTP & API > API Keys, create a new key.
+//   3. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env / Render
+//      environment variables.
 
-// Uses Gmail SMTP by default. In your .env set:
-//   SMTP_USER=youraddress@gmail.com
-//   SMTP_PASS=<a Gmail "App Password", NOT your normal password>
-// (Generate one at https://myaccount.google.com/apppasswords — requires
-// 2-Step Verification to be enabled on the Google account.)
-// To use a different provider instead, set SMTP_HOST/SMTP_PORT too.
-let transporter = null;
-
-function getTransporter() {
-  if (transporter) return transporter;
-
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn(
-      'WARNING: SMTP_USER / SMTP_PASS are not set. OTP emails will not be sent. ' +
-      'Set them in backend/.env (see README).'
-    );
-  }
-
-  if (process.env.SMTP_HOST) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-  } else {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-  }
-
-  return transporter;
-}
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 async function sendOtpEmail(toEmail, code, purpose) {
   const subject = purpose === 'reset'
     ? 'Your MediQuick password reset code'
     : 'Verify your MediQuick account';
 
-  const heading = purpose === 'reset'
-    ? 'Reset your password'
-    : 'Verify your email';
+  const heading = purpose === 'reset' ? 'Reset your password' : 'Verify your email';
 
   const intro = purpose === 'reset'
     ? 'Use the code below to reset your MediQuick password.'
@@ -57,19 +29,35 @@ async function sendOtpEmail(toEmail, code, purpose) {
     </div>
   `;
 
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    // No SMTP configured (e.g. local dev without credentials yet) —
-    // log the code instead of throwing, so the flow is still testable.
-    console.log(`[mailer] SMTP not configured. OTP for ${toEmail} (${purpose}): ${code}`);
+  if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) {
+    // Not configured yet — log the code instead of throwing, so the
+    // flow is still testable locally.
+    console.log(`[mailer] Brevo not configured. OTP for ${toEmail} (${purpose}): ${code}`);
     return;
   }
 
-  await getTransporter().sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to: toEmail,
-    subject,
-    html,
+  const response = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'api-key': process.env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: {
+        email: process.env.BREVO_SENDER_EMAIL,
+        name: process.env.BREVO_SENDER_NAME || 'MediQuick',
+      },
+      to: [{ email: toEmail }],
+      subject,
+      htmlContent: html,
+    }),
   });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Brevo send failed (${response.status}): ${body}`);
+  }
 }
 
 module.exports = { sendOtpEmail };
